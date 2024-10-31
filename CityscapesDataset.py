@@ -6,35 +6,48 @@ import numpy as np
 
 mean = [0.46617496, 0.36034706, 0.33016744]
 std = [0.23478602, 0.21425594, 0.20241965]
-
+from torchvision.models.segmentation import FCN_ResNet50_Weights
+weights = FCN_ResNet50_Weights.DEFAULT
+class_to_idx = {cls: idx for (idx, cls) in enumerate(weights.meta["categories"])}
 #dataset = Cityscapes('D:/DOWNLOAD/Dataset/mmsegmentation/data/cityscapes', split='train', mode='fine',
 #                     target_type='semantic')
 #img, smnt = dataset[0]
-mapping_20 = {  0: 0,        1: 0,        2: 0,        3: 0,        4: 0,        5: 0,        6: 0,
-        7: 1,
-        8: 2,
-                9: 0,        10: 0,
-        11: 3,
-        12: 4,
-        13: 5,
-                14: 0,        15: 0,        16: 0,
-        17: 6,
+mapping_20 = {  0: 0,
+                1: 0,
+                2: 0,
+                3: 0,
+                4: 0,
+                5: 0,
+                6: 0,
+                9: 0,
+                10: 0,
+                14: 0,
+                15: 0,
+                16: 0,
                 18: 0,
-        19: 7,
-        20: 8,
-        21: 9,
-        22: 10,
-        23: 11,
-        24: 12,
+                29: 0,
+                30: 0,
+                -1: 0,
+        24: 15,
+        26: 7,
+        32: 14,
+        33: 2,
+        21: 16,
+        #Lez fucking gooooooo
+        7: 1,
+        8: 3,
+        11: 4,
+        12: 5,
+        13: 6,
+        17: 8,
+        19: 9,
+        20: 10,
+        22: 11,
+        23: 12,
         25: 13,
-        26: 14,
-        27: 15,
-        28: 16,
-                29: 0,        30: 0,
-        31: 17,
-        32: 18,
-        33: 19,
-                -1: 0
+        27: 17,
+        28: 18,
+        31: 19,
     }
 class Cityscapes_ToPascal(Cityscapes):
     def __init__(self, *args, __transforms=None, augmented = False, resize = None, **kwargs):

@@ -57,28 +57,32 @@ def startTraining (num_epochs):
         
         #Saving a few prediction images during training to visualize training process
         #Skip this part
-        """for images, masks in train_loader:
+        for images, masks in train_loader:
             break
+        globals().update(locals())
         if ((epoch%test_frequency) == 0) or (epoch < 15):
-            for imgIdx in range (0, batch_size):
+            for imgIdx in range (0, min(batch_size,4)):
                 #Original image
                 fucking_image = ((images[imgIdx]*torch.tensor(std).view(3, 1, 1) + torch.tensor(mean).view(3, 1, 1)))*255
                 fucking_image = to_pil_image(fucking_image.to(torch.uint8))
                 if epoch==0:
-                    fucking_image.save("TrainPredict/Begin/" + str(imgIdx) + '_' + str(int(epoch)) + "_OG.png")
+                    fucking_image.save("TrainingProgress/Begin/" + str(imgIdx) + '_' + str(int(epoch)) + "_OG.png")
                     #Mask (Sanity check)
-                    sexmask = to_pil_image(torch.cat([torch.zeros((2,*images[imgIdx].shape[1:])), (masks[imgIdx]).detach().cpu().unsqueeze(0)], dim=0).to(torch.uint8)*255)
+                    sexmask = to_pil_image(torch.cat([torch.zeros((2,*images[imgIdx].shape[1:])),
+                                                      (masks[0]==(class_to_idx["car"])).detach().cpu().unsqueeze(0)],
+                                                     dim=0
+                                                     ).to(torch.uint8)*255)
                     #combine (Sanity check)
                     fucking_image.paste(sexmask, (0, 0), to_pil_image((masks[imgIdx]).detach().cpu().unsqueeze(0).to(torch.uint8)*150))
-                    fucking_image.save("TrainPredict/Begin/" + str(imgIdx) + '_' + str(int(epoch)) + "_MASK.png")
+                    fucking_image.save("TrainingProgress/Begin/" + str(imgIdx) + '_' + str(int(epoch)) + "_MASK.png")
+                    return 0
                 #Model Output
-                model_output = model(images[imgIdx].unsqueeze(0).to(device))['out'].softmax(dim=1)[:,class_to_idx["person"],:,:].detach().cpu()
+                model_output = model(images[imgIdx].unsqueeze(0).to(device))['out'].softmax(dim=1)[:,class_to_idx["car"],:,:].detach().cpu()
                 model_image = to_pil_image(torch.cat([model_output, torch.zeros((2,*model_output.shape[1:]))], dim=0))
                 #combine
                 fucking_image.paste(model_image, (0, 0), to_pil_image(model_output[0]))
-                fucking_image.save("TrainPredict/" + str(imgIdx) + '_' + str(int(epoch)) + ".png")
-            
-            globals().update(locals())"""
+                fucking_image.save("TrainingProgress/" + str(imgIdx) + '_' + str(int(epoch)) + ".png")            
+            globals().update(locals())
         #Actual training code
         for images, masks in train_loader:
             images, masks = images.to(device), masks.to(device)
