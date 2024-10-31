@@ -1,3 +1,7 @@
+import os
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+#os.environ["OMP_NUM_THREADS"] = "1"
+#os.environ["MKL_NUM_THREADS"] = "1"
 from torchvision.models.segmentation import fcn_resnet50, FCN_ResNet50_Weights
 from torchvision.transforms.functional import to_pil_image
 import torch
@@ -6,34 +10,46 @@ import random
 #from torchvision.transforms.v2.functional import InterpolationMode
 mean = [0.46617496, 0.36034706, 0.33016744]
 std = [0.23478602, 0.21425594, 0.20241965]
-num_epochs = 100
+num_epochs = 50
 test_frequency = 10 #1 for debug, 10 for real world
 LearningRate = 0.001
-batch_size = 4
+batch_size = 10
+num_workers =  8
 
 print (f"Going to train for {num_epochs} epoch")
         
 #Dataset, dataloader
+print (f"Dataset Loading...")
 from torch.utils.data import DataLoader
-from TemplateDataloader import SexDataset
+from CityscapesDataset import Cityscapes_ToPascal
 import torch.optim as optim
-Dataset = SexDataset ("G:\\jav folder\\OutputFolder", augmented = True)
-train_loader = DataLoader(Dataset, batch_size=batch_size, shuffle=False)
-
+Dataset = Cityscapes_ToPascal ('G:/cityscapes',
+                                 transforms=None, augmented = False, resize = (384),
+                                 split='train', mode='fine', target_type='semantic')
+train_loader = DataLoader(Dataset, batch_size=batch_size, shuffle=False,
+                          num_workers = num_workers, persistent_workers=True, pin_memory = True)
+print (f"Dataset Loaded")
+            
+print (f"Model Loading...")
 #model, weight, training hyperparameter
-weights = FCN_ResNet50_Weights.DEFAULT
-model = fcn_resnet50(weights=weights)
-model.eval()
-criterion = torch.nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=LearningRate)
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model.to(device)
-model.train()
-scaler = torch.amp.GradScaler('cuda')
+if __name__ == '__main__':
+    weights = FCN_ResNet50_Weights.DEFAULT
+    model = fcn_resnet50(weights=weights)
+    model.eval()
+    criterion = torch.nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=LearningRate)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+    model.train()
+    scaler = torch.amp.GradScaler('cuda')
+    
+    #class to index of output array.
+    class_to_idx = {cls: idx for (idx, cls) in enumerate(weights.meta["categories"])}
+    
+print (f"Model Loaded")
 
-#class to index of output array.
-class_to_idx = {cls: idx for (idx, cls) in enumerate(weights.meta["categories"])}
 
+print (f"Start training...")
 def startTraining (num_epochs):
     best_loss = 1
     for epoch in range(num_epochs):
@@ -41,7 +57,7 @@ def startTraining (num_epochs):
         
         #Saving a few prediction images during training to visualize training process
         #Skip this part
-        for images, masks in train_loader:
+        """for images, masks in train_loader:
             break
         if ((epoch%test_frequency) == 0) or (epoch < 15):
             for imgIdx in range (0, batch_size):
@@ -62,15 +78,14 @@ def startTraining (num_epochs):
                 fucking_image.paste(model_image, (0, 0), to_pil_image(model_output[0]))
                 fucking_image.save("TrainPredict/" + str(imgIdx) + '_' + str(int(epoch)) + ".png")
             
-            globals().update(locals())
-
+            globals().update(locals())"""
         #Actual training code
         for images, masks in train_loader:
             images, masks = images.to(device), masks.to(device)
             optimizer.zero_grad()
             with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
                 outputs = model(images)['out']
-                loss = criterion(outputs, masks.long()*class_to_idx["person"])
+                loss = criterion(outputs, masks.long()) #*class_to_idx["person"])
             # Scales the loss, and calls backward()
             # to create scaled gradients
             # (FP16) helps reducing vram
@@ -89,5 +104,6 @@ def startTraining (num_epochs):
     torch.save (model, "models/fuckmodel.pt")
     globals().update(locals()) #STORE ALL VARIABLE TO GLOBAL, the stackoverflow answer hates this though...
     
-startTraining(num_epochs)
+if __name__ == '__main__':
+    startTraining(num_epochs)
 
