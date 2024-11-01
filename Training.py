@@ -10,24 +10,33 @@ import random
 #from torchvision.transforms.v2.functional import InterpolationMode
 mean = [0.46617496, 0.36034706, 0.33016744]
 std = [0.23478602, 0.21425594, 0.20241965]
-num_epochs = 50
+num_epochs = 500
 test_frequency = 10 #1 for debug, 10 for real world
 LearningRate = 0.001
-batch_size = 10
-num_workers =  8
+batch_size = 8
+num_workers =  12
 
 print (f"Going to train for {num_epochs} epoch")
         
 #Dataset, dataloader
 print (f"Dataset Loading...")
 from torch.utils.data import DataLoader
-from CityscapesDataset import Cityscapes_ToPascal
+import CityscapesDataset
 import torch.optim as optim
-Dataset = Cityscapes_ToPascal ('G:/cityscapes',
-                                 transforms=None, augmented = False, resize = (384),
-                                 split='train', mode='fine', target_type='semantic')
-train_loader = DataLoader(Dataset, batch_size=batch_size, shuffle=False,
-                          num_workers = num_workers, persistent_workers=True, pin_memory = True)
+
+if __name__ == '__main__':
+    Dataset = CityscapesDataset.Cityscapes_ToPascal ('G:/cityscapes',
+                                     transforms=None, augmented = True, resize = (384),
+                                     split='train', mode='fine', target_type='semantic')
+
+    TestDataset = CityscapesDataset.Cityscapes_ToPascal ('G:/cityscapes',
+                                     transforms=None, augmented = False, resize = (384),
+                                     split='val', mode='fine', target_type='semantic')
+    class_to_idx = CityscapesDataset.class_to_idx
+    train_loader = DataLoader(Dataset, batch_size=batch_size, shuffle=False,
+                              num_workers = num_workers, persistent_workers=True, pin_memory = True)
+    test_loader = DataLoader(TestDataset, batch_size=int((batch_size+0.5)/2), shuffle=False,
+                              num_workers = num_workers, persistent_workers=True, pin_memory = True)
 print (f"Dataset Loaded")
             
 print (f"Model Loading...")
@@ -42,10 +51,7 @@ if __name__ == '__main__':
     model.to(device)
     model.train()
     scaler = torch.amp.GradScaler('cuda')
-    
-    #class to index of output array.
-    class_to_idx = {cls: idx for (idx, cls) in enumerate(weights.meta["categories"])}
-    
+   
 print (f"Model Loaded")
 
 
@@ -57,7 +63,7 @@ def startTraining (num_epochs):
         
         #Saving a few prediction images during training to visualize training process
         #Skip this part
-        for images, masks in train_loader:
+        for images, masks in test_loader:
             break
         globals().update(locals())
         if ((epoch%test_frequency) == 0) or (epoch < 15):
@@ -69,13 +75,12 @@ def startTraining (num_epochs):
                     fucking_image.save("TrainingProgress/Begin/" + str(imgIdx) + '_' + str(int(epoch)) + "_OG.png")
                     #Mask (Sanity check)
                     sexmask = to_pil_image(torch.cat([torch.zeros((2,*images[imgIdx].shape[1:])),
-                                                      (masks[0]==(class_to_idx["car"])).detach().cpu().unsqueeze(0)],
+                                                      (masks[imgIdx]==(class_to_idx["car"])).detach().cpu().unsqueeze(0)],
                                                      dim=0
                                                      ).to(torch.uint8)*255)
                     #combine (Sanity check)
                     fucking_image.paste(sexmask, (0, 0), to_pil_image((masks[imgIdx]).detach().cpu().unsqueeze(0).to(torch.uint8)*150))
                     fucking_image.save("TrainingProgress/Begin/" + str(imgIdx) + '_' + str(int(epoch)) + "_MASK.png")
-                    return 0
                 #Model Output
                 model_output = model(images[imgIdx].unsqueeze(0).to(device))['out'].softmax(dim=1)[:,class_to_idx["car"],:,:].detach().cpu()
                 model_image = to_pil_image(torch.cat([model_output, torch.zeros((2,*model_output.shape[1:]))], dim=0))
@@ -84,6 +89,7 @@ def startTraining (num_epochs):
                 fucking_image.save("TrainingProgress/" + str(imgIdx) + '_' + str(int(epoch)) + ".png")            
             globals().update(locals())
         #Actual training code
+        model.train()
         for images, masks in train_loader:
             images, masks = images.to(device), masks.to(device)
             optimizer.zero_grad()
@@ -99,10 +105,19 @@ def startTraining (num_epochs):
             running_loss += loss.item()
             #updating global variable
             globals().update(locals())
-
-        print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {running_loss/len(train_loader)}")
-        if (running_loss/len(train_loader)) < best_loss:
-            best_loss = running_loss
+        torch.cuda.empty_cache()
+        #Testing set
+        model.eval()
+        testing_loss = 0
+        for images, masks in test_loader:
+            images, masks = images.to(device), masks.to(device)
+            with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
+                outputs = model(images)['out']
+                loss = criterion(outputs, masks.long())
+            testing_loss += loss.item()
+        print(f"Epoch [{epoch+1}/{num_epochs}], Training Loss: {running_loss/len(train_loader)}, Testing Loss: {testing_loss/len(test_loader)}")
+        if (testing_loss) < best_loss:
+            best_loss = testing_loss
             torch.save (model, "models/bestmodel.pt")
     torch.cuda.empty_cache()
     torch.save (model, "models/fuckmodel.pt")
