@@ -49,13 +49,13 @@ class Cityscapes_ToPascal(Cityscapes):
             self.augmentPosition = v2.Compose([
                 v2.RandomHorizontalFlip(0.5),
                 v2.RandomVerticalFlip(0.1),
-                v2.RandomRotation(degrees = 5),
-                v2.RandomAffine(degrees = 5),
+                v2.RandomRotation(degrees = 6),
+                v2.RandomAffine(degrees = 6),
                 v2.RandomPerspective(distortion_scale=0.15, p=0.80)
             ])
             self.augmentColour = v2.Compose([
                 v2.ColorJitter(brightness=0.35, contrast = 0.25, saturation = 0.1, hue = 0.04),
-                v2.GaussianNoise(mean = 0, sigma = 0.01) #default sigma 0.1
+                v2.GaussianNoise(mean = 0, sigma = 0.02) #default sigma 0.1
             ])
         
     def replaceMask(self, mask_OG):
